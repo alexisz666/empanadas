@@ -46,7 +46,13 @@ export function LandingHeader() {
         </nav>
 
         {/* Desktop CTA */}
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-2 md:flex">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/repartidor/login">Acceso repartidor</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/login">Acceso admin</Link>
+          </Button>
           <Button asChild className="gap-2">
             <a
               href={`https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`}
@@ -89,6 +95,18 @@ export function LandingHeader() {
               </Link>
             ))}
             <div className="mt-4 border-t border-border pt-4">
+              <div className="mb-3 grid grid-cols-1 gap-2">
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/admin/login" onClick={() => setIsMobileMenuOpen(false)}>
+                    Acceso admin
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/repartidor/login" onClick={() => setIsMobileMenuOpen(false)}>
+                    Acceso repartidor
+                  </Link>
+                </Button>
+              </div>
               <Button asChild className="w-full gap-2">
                 <a
                   href={`https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`}
