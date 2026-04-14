@@ -6,9 +6,24 @@ import { StatCard } from '@/components/shared/stat-card'
 import { FilterSelect } from '@/components/shared/filter-select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { getProducts, getTopSellingProducts } from '@/services/api'
+import { getProducts, createProduct, deleteProduct } from '@/services/api'
 import type { Product } from '@/data/mock-data'
-import { Package, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
+import { Package, TrendingUp, TrendingDown, BarChart3, Plus, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   BarChart,
   Bar,
@@ -30,6 +45,12 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newPrice, setNewPrice] = useState('')
+  const [newCategory, setNewCategory] = useState<Product['category']>('empanada')
 
   async function loadProducts() {
     setIsLoading(true)
@@ -53,12 +74,12 @@ export default function ProductsPage() {
       : products.filter((p) => p.category === categoryFilter)
 
   const totalSold = products.reduce((sum, p) => sum + p.totalSold, 0)
-  const topProduct = products.reduce((max, p) =>
-    p.totalSold > max.totalSold ? p : max
-  , products[0])
-  const leastSold = products.reduce((min, p) =>
-    p.totalSold < min.totalSold ? p : min
-  , products[0])
+  const topProduct = products.length
+    ? products.reduce((max, p) => (p.totalSold > max.totalSold ? p : max), products[0])
+    : null
+  const leastSold = products.length
+    ? products.reduce((min, p) => (p.totalSold < min.totalSold ? p : min), products[0])
+    : null
 
   const chartData = products
     .filter((p) => p.category === 'empanada')
@@ -66,6 +87,42 @@ export default function ProductsPage() {
       name: p.name.replace('Empanada de ', '').replace('Empanada ', ''),
       vendidas: p.totalSold,
     }))
+
+  async function handleCreateProduct() {
+    const price = Number(newPrice)
+    if (!newName || !Number.isFinite(price)) {
+      return
+    }
+
+    setIsSaving(true)
+    const result = await createProduct({
+      name: newName,
+      description: newDescription,
+      price,
+      category: newCategory,
+    })
+    setIsSaving(false)
+
+    if (!result.success) {
+      return
+    }
+
+    setIsCreateOpen(false)
+    setNewName('')
+    setNewDescription('')
+    setNewPrice('')
+    setNewCategory('empanada')
+    loadProducts()
+  }
+
+  async function handleDeleteProduct(productId: string) {
+    const result = await deleteProduct(productId)
+    if (!result.success) {
+      return
+    }
+
+    setProducts(prev => prev.filter(product => product.id !== productId))
+  }
 
   return (
     <div className="space-y-6">
@@ -75,6 +132,12 @@ export default function ProductsPage() {
         icon={Package}
         onRefresh={loadProducts}
         isRefreshing={isLoading}
+        actions={
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Agregar producto
+          </Button>
+        }
       />
 
       {/* Stats */}
@@ -177,21 +240,67 @@ export default function ProductsPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onDelete={handleDeleteProduct}
+                />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo producto</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Nombre"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+            />
+            <Input
+              placeholder="Descripción"
+              value={newDescription}
+              onChange={(event) => setNewDescription(event.target.value)}
+            />
+            <Input
+              placeholder="Precio"
+              type="number"
+              value={newPrice}
+              onChange={(event) => setNewPrice(event.target.value)}
+            />
+            <Select value={newCategory} onValueChange={(value) => setNewCategory(value as Product['category'])}>
+              <SelectTrigger>
+                <SelectValue placeholder="Categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                {categoryOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button className="w-full" onClick={handleCreateProduct} disabled={isSaving}>
+              {isSaving ? 'Guardando...' : 'Guardar producto'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 interface ProductCardProps {
   product: Product
+  onDelete: (productId: string) => void
 }
 
-function ProductCard({ product }: ProductCardProps) {
+function ProductCard({ product, onDelete }: ProductCardProps) {
   return (
     <Card className="overflow-hidden">
       <div className="aspect-video bg-gradient-to-br from-primary/10 to-accent/10">
@@ -223,7 +332,15 @@ function ProductCard({ product }: ProductCardProps) {
           <span className="text-xl font-bold text-primary">
             ${product.price}
           </span>
-          <div className="text-right">
+          <div className="flex items-center gap-3 text-right">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(product.id)}
+              aria-label="Eliminar producto"
+            >
+              <Trash2 className="h-4 w-4 text-red-600" />
+            </Button>
             <p className="text-sm font-medium">
               {product.totalSold.toLocaleString()}
             </p>

@@ -48,8 +48,18 @@ const simulateDelay = (ms: number = 500) =>
  * TODO: Reemplazar por fetch('/api/dashboard/metrics')
  */
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
-  await simulateDelay(300)
-  return mockDashboardMetrics
+  try {
+    const response = await fetch('/api/dashboard/metrics', { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Dashboard metrics request failed with status ${response.status}`)
+    }
+
+    return (await response.json()) as DashboardMetrics
+  } catch (error) {
+    console.error('Error fetching dashboard metrics from API, using mock data:', error)
+    await simulateDelay(300)
+    return mockDashboardMetrics
+  }
 }
 
 /**
@@ -57,8 +67,18 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
  * TODO: Reemplazar por fetch('/api/dashboard/sales-chart?period=week')
  */
 export async function getWeeklySalesChart() {
-  await simulateDelay(400)
-  return mockSalesChartData
+  try {
+    const response = await fetch('/api/dashboard/sales-chart', { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Weekly sales chart request failed with status ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error fetching sales chart from API, using mock data:', error)
+    await simulateDelay(300)
+    return mockSalesChartData
+  }
 }
 
 /**
@@ -199,15 +219,29 @@ export async function getDeliveryData(): Promise<{
   completedDeliveries: Order[]
   deliveryPersons: DeliveryPerson[]
 }> {
-  await simulateDelay(400)
-  
-  const deliveryOrders = mockOrders.filter(o => o.deliveryMethod === 'delivery')
-  
-  return {
-    pendingDeliveries: deliveryOrders.filter(o => o.status === 'ready'),
-    inRouteDeliveries: deliveryOrders.filter(o => o.status === 'delivering'),
-    completedDeliveries: deliveryOrders.filter(o => o.status === 'delivered'),
-    deliveryPersons: mockDeliveryPersons,
+  try {
+    const response = await fetch('/api/deliveries', { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Deliveries request failed with status ${response.status}`)
+    }
+
+    return (await response.json()) as {
+      pendingDeliveries: Order[]
+      inRouteDeliveries: Order[]
+      completedDeliveries: Order[]
+      deliveryPersons: DeliveryPerson[]
+    }
+  } catch (error) {
+    console.error('Error fetching deliveries from API, using mock data:', error)
+    await simulateDelay(300)
+
+    const deliveryOrders = mockOrders.filter(o => o.deliveryMethod === 'delivery')
+    return {
+      pendingDeliveries: deliveryOrders.filter(o => o.status === 'ready' || o.status === 'pending'),
+      inRouteDeliveries: deliveryOrders.filter(o => o.status === 'delivering'),
+      completedDeliveries: deliveryOrders.filter(o => o.status === 'delivered'),
+      deliveryPersons: mockDeliveryPersons,
+    }
   }
 }
 
@@ -219,9 +253,22 @@ export async function assignDeliveryPerson(
   orderId: string, 
   deliveryPersonId: string
 ): Promise<{ success: boolean }> {
-  await simulateDelay(300)
-  console.log(`[Mock API] Repartidor ${deliveryPersonId} asignado al pedido ${orderId}`)
-  return { success: true }
+  try {
+    const response = await fetch('/api/deliveries/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, deliveryPersonId }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Assign delivery failed with status ${response.status}`)
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error assigning delivery person:', error)
+    return { success: false }
+  }
 }
 
 /**
@@ -232,9 +279,22 @@ export async function completeDelivery(
   orderId: string, 
   code?: string
 ): Promise<{ success: boolean }> {
-  await simulateDelay(300)
-  console.log(`[Mock API] Entrega ${orderId} completada con código: ${code}`)
-  return { success: true }
+  try {
+    const response = await fetch('/api/deliveries/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, code }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Complete delivery failed with status ${response.status}`)
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error completing delivery:', error)
+    return { success: false }
+  }
 }
 
 // =============================================
@@ -249,22 +309,43 @@ export async function getClients(filters?: {
   search?: string
   isFrequent?: boolean
 }): Promise<Client[]> {
-  await simulateDelay(400)
-  
-  let filteredClients = [...mockClients]
-  
-  if (filters?.search) {
-    const searchLower = filters.search.toLowerCase()
-    filteredClients = filteredClients.filter(c => 
-      c.name.toLowerCase().includes(searchLower) ||
-      c.phone.includes(filters.search!)
-    )
+  try {
+    const response = await fetch('/api/clients', { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Clients request failed with status ${response.status}`)
+    }
+
+    let clients = (await response.json()) as Client[]
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase()
+      clients = clients.filter(c =>
+        c.name.toLowerCase().includes(searchLower) ||
+        c.phone.includes(filters.search || '')
+      )
+    }
+    if (filters?.isFrequent !== undefined) {
+      clients = clients.filter(c => c.isFrequent === filters.isFrequent)
+    }
+
+    return clients.sort((a, b) => b.totalSpent - a.totalSpent)
+  } catch (error) {
+    console.error('Error fetching clients from API, using mock data:', error)
+    await simulateDelay(300)
+
+    let filteredClients = [...mockClients]
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase()
+      filteredClients = filteredClients.filter(c =>
+        c.name.toLowerCase().includes(searchLower) ||
+        c.phone.includes(filters.search || '')
+      )
+    }
+    if (filters?.isFrequent !== undefined) {
+      filteredClients = filteredClients.filter(c => c.isFrequent === filters.isFrequent)
+    }
+
+    return filteredClients.sort((a, b) => b.totalSpent - a.totalSpent)
   }
-  if (filters?.isFrequent !== undefined) {
-    filteredClients = filteredClients.filter(c => c.isFrequent === filters.isFrequent)
-  }
-  
-  return filteredClients.sort((a, b) => b.totalSpent - a.totalSpent)
 }
 
 /**
@@ -272,8 +353,18 @@ export async function getClients(filters?: {
  * TODO: Reemplazar por fetch('/api/clients/:id')
  */
 export async function getClientById(clientId: string): Promise<Client | null> {
-  await simulateDelay(300)
-  return mockClients.find(c => c.id === clientId) || null
+  try {
+    const response = await fetch(`/api/clients?id=${clientId}`, { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Client by id request failed with status ${response.status}`)
+    }
+
+    return (await response.json()) as Client | null
+  } catch (error) {
+    console.error('Error fetching client by id, using mock data:', error)
+    await simulateDelay(300)
+    return mockClients.find(c => c.id === clientId) || null
+  }
 }
 
 /**
@@ -281,10 +372,20 @@ export async function getClientById(clientId: string): Promise<Client | null> {
  * TODO: Reemplazar por fetch('/api/clients/top?limit=20')
  */
 export async function getTopClients(limit: number = 20): Promise<Client[]> {
-  await simulateDelay(350)
-  return [...mockClients]
-    .sort((a, b) => b.totalSpent - a.totalSpent)
-    .slice(0, limit)
+  try {
+    const response = await fetch(`/api/clients?sort=top&limit=${limit}`, { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error(`Top clients request failed with status ${response.status}`)
+    }
+
+    return (await response.json()) as Client[]
+  } catch (error) {
+    console.error('Error fetching top clients, using mock data:', error)
+    await simulateDelay(300)
+    return [...mockClients]
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, limit)
+  }
 }
 
 // =============================================
@@ -353,6 +454,54 @@ export async function getTopSellingProducts(limit: number = 10): Promise<Product
     return [...mockProducts]
       .sort((a, b) => b.totalSold - a.totalSold)
       .slice(0, limit)
+  }
+}
+
+export async function createProduct(
+  payload: Pick<Product, 'name' | 'description' | 'price' | 'category' | 'type'>
+): Promise<{ success: boolean; product?: Product; error?: string }> {
+  try {
+    const response = await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = (await response.json()) as {
+      ok: boolean
+      product?: Product
+      error?: string
+    }
+
+    if (!response.ok || !data.ok) {
+      return { success: false, error: data.error || 'No se pudo crear el producto' }
+    }
+
+    return { success: true, product: data.product }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error inesperado',
+    }
+  }
+}
+
+export async function deleteProduct(productId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`/api/products?id=${productId}`, {
+      method: 'DELETE',
+    })
+
+    const data = (await response.json()) as { ok: boolean; error?: string }
+    if (!response.ok || !data.ok) {
+      return { success: false, error: data.error || 'No se pudo eliminar el producto' }
+    }
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error inesperado',
+    }
   }
 }
 
